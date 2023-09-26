@@ -15,6 +15,33 @@ def generate_command_with_genres_filter(filter_genres:list) -> str:
             command += '\n AND '
     return command
 
+def generate_command_favorite_movie(user_id:int) -> str:
+    command = f'''
+    SELECT * FROM "user_movie" WHERE user_id = {user_id};
+    '''
+    return command
+
+def get_favorite_filter(cursor,find_string:str,user_id:int,per_page:int,page:int) -> list:
+    cursor.execute(generate_command_favorite_movie(user_id))
+    returned_values = []
+    movie_ids = cursor.fetchall()
+    if len(movie_ids) == 0:
+        return [1,[]]
+    command = f'SELECT * FROM "movie" WHERE id IN ('
+    bonus_string = ''
+    for movie_id in movie_ids:
+            command += f'{movie_id[1]},'
+    if find_string != None:
+        bonus_string += f'AND LOWER(title) LIKE \'%{find_string.lower()}%\''
+    command = command[0:len(command)-1] + ") " + bonus_string + f" LIMIT {per_page*page} OFFSET {per_page*(page-1)};"
+    cursor.execute(command)
+    movie = cursor.fetchall()
+    command_count = command.replace('*',"COUNT(*)")
+    cursor.execute(command_count)
+    returned_values.append(cursor.fetchall()[0][0])
+    returned_values.append(movie)
+    return returned_values
+
 def generete_command_getting_movie_by_ids(find_string:str,movie_ids:tuple) -> str:
     command = f'''SELECT * FROM "movie" WHERE id IN ('''
     for i in list(movie_ids):

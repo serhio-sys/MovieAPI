@@ -3,7 +3,7 @@ from base64 import b64encode,b64decode
 from .serializers import GenreSerializer,MovieSerializer,UserSerializer,PaginateResponseMovie
 from .database_constant_commands import *
 from .decorators import command_decorator
-from .database_utils import get_filtered_movie_by_genres_and_string,get_filtered_movie_by_string
+from .database_utils import get_filtered_movie_by_genres_and_string,get_filtered_movie_by_string,get_favorite_filter
 
 CONNECTION = psycopg2.connect(
         database="MovieApp",
@@ -85,7 +85,7 @@ async def read_all_movie(**kwargs) -> PaginateResponseMovie:
             per_page=MOVIE_PER_PAGE,
             page=page
         )
-        max_pages = round(movie[0] / MOVIE_PER_PAGE)
+        max_pages = 1 if round(movie[0] / MOVIE_PER_PAGE) == 0 else round(movie[0] / MOVIE_PER_PAGE)
         movie = movie[1]
 
     serialized_list = []
@@ -97,6 +97,33 @@ async def read_all_movie(**kwargs) -> PaginateResponseMovie:
         serialized_list.append(MovieSerializer.auto_fill(movie=m,genres=genres))
         
     return PaginateResponseMovie(results=serialized_list,page=page,max_page=max_pages,search_string=find_string,filter_data={"genres":fliter_genres})
+
+@command_decorator
+async def read_all_favorite_movie(**kwargs) -> PaginateResponseMovie:
+    page = int(kwargs['page'])
+    find_string = kwargs['string']
+    filter_genres = kwargs['genres']
+    user = kwargs['user']
+
+    movie = get_favorite_filter(
+        cursor=CURSOR,
+        find_string=find_string,
+        user_id=user.id,
+        per_page=MOVIE_PER_PAGE,
+        page=page
+    )
+
+    max_pages = 1 if round(movie[0] / MOVIE_PER_PAGE) == 0 else round(movie[0] / MOVIE_PER_PAGE)
+
+    serialized_list = []
+    for m in movie[1]:
+        CURSOR.execute(f'''
+        SELECT * FROM "genre_movie" WHERE movie_id = {int(m[0])};
+        ''')
+        genres = CURSOR.fetchall()
+        serialized_list.append(MovieSerializer.auto_fill(movie=m,genres=genres))
+        
+    return PaginateResponseMovie(results=serialized_list,page=page,max_page=max_pages,search_string=find_string,filter_data={"genres":filter_genres})
 
 @command_decorator
 async def read_detail_user_without_favorite(**kwargs) -> UserSerializer:

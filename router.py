@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Body
 from fastapi.exceptions import HTTPException
-from database.database import read_detail_movie,movie_to_favorite, read_all_genres, read_all_movie, create_user_db, get_auth_user, b64crypt_decode, get_favorite
+from database.database import read_detail_movie,read_all_favorite_movie,movie_to_favorite, read_all_genres, read_all_movie, create_user_db, get_auth_user, b64crypt_decode, get_favorite
 from database.serializers import UserRegistrationSerializer, UserLoginSerializer
 from request_body import MovieRequest
 from parse import parse_data
@@ -8,6 +8,19 @@ from dependencies import User
 from auth.auth import generate_token,LoginResponse
 
 router = APIRouter()
+
+@router.post("/favorite-movie/")
+async def favorite_movie(user : User, movie_data : MovieRequest):
+    page = movie_data.page
+    string = movie_data.string 
+    genres = movie_data.genres
+    movies = await read_all_favorite_movie(
+        user=user,
+        page=page,
+        string=string,
+        genres=genres
+    )
+    return movies
 
 @router.post("/to-favorite/{pk}/")
 async def add_to_favorite(user : User, pk):
