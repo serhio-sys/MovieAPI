@@ -12,6 +12,7 @@ pyjwt = "*"
 python-decouple = "*"
 pydantic = {extras = ["email"], version = "*"}
 requests = "*"
+jinja2 = "*"
 
 [dev-packages]
 

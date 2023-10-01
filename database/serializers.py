@@ -4,10 +4,28 @@ from typing import Optional
 class GenreSerializer(BaseModel):
     name : str
 
-class PaginateResponseMovie(BaseModel):
+class CommentSerializer(BaseModel):
+
+    @staticmethod
+    def auto_fill(comment,author):
+        return CommentSerializer(
+            id = comment[0],
+            text = comment[1],
+            author = author[0],
+            movie_id = comment[3]
+        )
+
+    id : int
+    text : str
+    author : str
+    movie_id : int
+
+class BasePaginateResponse(BaseModel):
     results : list
     page : int
     max_page : int
+
+class PaginateResponseMovie(BasePaginateResponse):
     search_string : Optional[str] = None
     filter_data : Optional[dict] = None
 

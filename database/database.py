@@ -1,21 +1,43 @@
-import psycopg2 
+import psycopg2
+from psycopg2 import errors
 from base64 import b64encode,b64decode
-from .serializers import GenreSerializer,MovieSerializer,UserSerializer,PaginateResponseMovie
+from .serializers import GenreSerializer,MovieSerializer,UserSerializer,PaginateResponseMovie,BasePaginateResponse,CommentSerializer
 from .database_constant_commands import *
 from .decorators import command_decorator
-from .database_utils import get_filtered_movie_by_genres_and_string,get_filtered_movie_by_string,get_favorite_filter
+from .database_utils import get_filtered_movie_by_genres_and_string,get_filtered_movie_by_string,get_favorite_filter,get_full_movies_info
 
-CONNECTION = psycopg2.connect(
-        database="MovieApp",
-        host="localhost",
-        user="wertun",
-        password="43554453",
-        port="5432"
-    )
+DATABASE_CONNECTION_SETTINGS = {
+    "database":"MovieApp",
+    "host":"localhost",
+    "user":"wertun",
+    "password":"43554453",
+    "port":"5432"
+}
+
+def close_connection():
+    CONNECTION.close()
+    CURSOR.close()
+
+def create_connection():
+    while True:
+        try:
+            connection = psycopg2.connect(**DATABASE_CONNECTION_SETTINGS)
+            cursor = connection.cursor()
+            return connection, cursor
+        except psycopg2.Error as error:
+            if isinstance(error, errors.InFailedSqlTransaction):
+                # Roll back the transaction and retry
+                cursor.connection.rollback()
+                continue
+            else:
+                # Handle other exceptions here if needed
+                raise
+
+CONNECTION, CURSOR = create_connection()
 
 MOVIE_PER_PAGE = 20
+COMMENTS_PER_PAGE = 10
 
-CURSOR = CONNECTION.cursor()
 
 def b64crypt_encode(password):
     return b64encode(str(password).encode()).decode()
@@ -39,8 +61,8 @@ def create_database():
     except psycopg2.Error as error:
         print(error)
 
-@command_decorator
-async def read_all_genres() -> list:
+@command_decorator(cursor=CURSOR)
+def read_all_genres() -> list:
     CURSOR.execute(SELECT_ALL_GENRES)
     genres = CURSOR.fetchall()
     genres_list = []
@@ -49,8 +71,8 @@ async def read_all_genres() -> list:
     
     return genres_list
 
-@command_decorator 
-async def read_detail_movie(**kwargs) -> MovieSerializer:
+@command_decorator(cursor=CURSOR)
+def read_detail_movie(**kwargs) -> MovieSerializer:
     CURSOR.execute(f'''
     SELECT * FROM "movie" WHERE id = {kwargs['pk']}
     ''')
@@ -64,8 +86,8 @@ async def read_detail_movie(**kwargs) -> MovieSerializer:
 
     return serialized
 
-@command_decorator
-async def read_all_movie(**kwargs) -> PaginateResponseMovie:
+@command_decorator(cursor=CURSOR)
+def read_all_movie(**kwargs) -> PaginateResponseMovie:
     page = int(kwargs['page'])
     find_string = kwargs['string']
     fliter_genres = kwargs['genres']
@@ -76,7 +98,7 @@ async def read_all_movie(**kwargs) -> PaginateResponseMovie:
             filter_genres=fliter_genres,
             find_string=find_string
         )
-        max_pages = 1 if round(len(movie) / MOVIE_PER_PAGE) == 0 else round(len(movie) / MOVIE_PER_PAGE)
+        max_pages = 1 if round(len(movie[0]) / MOVIE_PER_PAGE) == 0 else round(len(movie[0]) / MOVIE_PER_PAGE)
         movie = movie[0:MOVIE_PER_PAGE]
     else:
         movie = get_filtered_movie_by_string(
@@ -88,18 +110,11 @@ async def read_all_movie(**kwargs) -> PaginateResponseMovie:
         max_pages = 1 if round(movie[0] / MOVIE_PER_PAGE) == 0 else round(movie[0] / MOVIE_PER_PAGE)
         movie = movie[1]
 
-    serialized_list = []
-    for m in movie:
-        CURSOR.execute(f'''
-        SELECT * FROM "genre_movie" WHERE movie_id = {int(m[0])};
-        ''')
-        genres = CURSOR.fetchall()
-        serialized_list.append(MovieSerializer.auto_fill(movie=m,genres=genres))
-        
+    serialized_list = get_full_movies_info(CURSOR=CURSOR,movies=movie)
     return PaginateResponseMovie(results=serialized_list,page=page,max_page=max_pages,search_string=find_string,filter_data={"genres":fliter_genres})
 
-@command_decorator
-async def read_all_favorite_movie(**kwargs) -> PaginateResponseMovie:
+@command_decorator(cursor=CURSOR)
+def read_all_favorite_movie(**kwargs) -> PaginateResponseMovie:
     page = int(kwargs['page'])
     find_string = kwargs['string']
     filter_genres = kwargs['genres']
@@ -125,8 +140,8 @@ async def read_all_favorite_movie(**kwargs) -> PaginateResponseMovie:
         
     return PaginateResponseMovie(results=serialized_list,page=page,max_page=max_pages,search_string=find_string,filter_data={"genres":filter_genres})
 
-@command_decorator
-async def read_detail_user_without_favorite(**kwargs) -> UserSerializer:
+@command_decorator(cursor=CURSOR)
+def read_detail_user_without_favorite(**kwargs) -> UserSerializer:
     CURSOR.execute(f'''
     SELECT * FROM "user" WHERE id = {kwargs['pk']};
     ''')
@@ -136,17 +151,20 @@ async def read_detail_user_without_favorite(**kwargs) -> UserSerializer:
 
     return serialized_user
 
-@command_decorator
-async def create_user_db(**kwargs):
+@command_decorator(cursor=CURSOR)
+def create_user_db(**kwargs):
     user = kwargs['user']
-    CURSOR.execute(f'''
-    INSERT INTO "user" (username,email,password) VALUES ('{user.username}','{user.email}','{b64crypt_encode(password=user.password)}')
-    ''')
+    try:
+        CURSOR.execute(f'''
+        INSERT INTO "user" (username,email,password) VALUES ('{user.username}','{user.email}','{b64crypt_encode(password=user.password)}')
+        ''')
+    except errors.UniqueViolation:
+        return "User is already exists!"
     
     CONNECTION.commit()
 
-@command_decorator
-async def create_token(**kwargs):
+@command_decorator(cursor=CURSOR)
+def create_token(**kwargs):
     user_id = kwargs['user']
     token = kwargs['token']
     CURSOR.execute(f'''
@@ -154,16 +172,16 @@ async def create_token(**kwargs):
     ''')
     CONNECTION.commit()
 
-@command_decorator
-async def delete_created_token(**kwargs):
+@command_decorator(cursor=CURSOR)
+def delete_created_token(**kwargs):
     user_id = kwargs['user']
     CURSOR.execute(f'''
     DELETE FROM "token" WHERE user_id = {user_id};
     ''')
     CONNECTION.commit()
 
-@command_decorator
-async def get_auth_user(**kwargs):
+@command_decorator(cursor=CURSOR)
+def get_auth_user(**kwargs):
     CURSOR.execute(f'''
     SELECT * FROM "user" WHERE username = '{kwargs['username']}'
     ''')
@@ -172,8 +190,8 @@ async def get_auth_user(**kwargs):
 
     return user
 
-@command_decorator
-async def get_favorite(**kwargs) -> list:
+@command_decorator(cursor=CURSOR)
+def get_favorite(**kwargs) -> list:
     CURSOR.execute(f'''
     SELECT * FROM "user_movie" WHERE user_id = {int(kwargs['user'])}
     ''')
@@ -192,8 +210,8 @@ async def get_favorite(**kwargs) -> list:
     
     return serialized_fav
 
-@command_decorator
-async def movie_to_favorite(**kwargs):
+@command_decorator(cursor=CURSOR)
+def movie_to_favorite(**kwargs):
     movie_id = kwargs['movie_id']
     user_id = kwargs['user']
     CURSOR.execute(f'''
@@ -215,3 +233,36 @@ async def movie_to_favorite(**kwargs):
     else:
         return False
 
+@command_decorator(cursor=CURSOR)
+def create_comment(**kwargs):
+    data = kwargs['data']
+    CURSOR.execute(f'INSERT INTO "comment" (text,author_id,movie_id) VALUES (\'{data.text}\',{data.author_id},{data.movie_id});')
+    CONNECTION.commit()
+
+@command_decorator(cursor=CURSOR)
+def delete_comment(**kwargs):
+    author_id = kwargs['author_id']
+    comment_id = kwargs['comment_id']
+    CURSOR.execute(f'DELETE FROM "comment" WHERE author_id = {author_id} AND id = {comment_id};')
+    CONNECTION.commit()
+
+@command_decorator(cursor=CURSOR)
+def get_comments(**kwargs):
+    serialized_list = []
+    movie_id = kwargs['movie_id']
+    page = kwargs['page']
+    command = f'SELECT * FROM "comment" WHERE movie_id = {movie_id}'
+    CURSOR.execute(command+f' LIMIT {COMMENTS_PER_PAGE*page} OFFSET {COMMENTS_PER_PAGE*(page-1)};')
+    comments = CURSOR.fetchall()
+    CURSOR.execute(command.replace('*','COUNT(*)')+";")
+    comments_count = round(CURSOR.fetchall()[0][0]/MOVIE_PER_PAGE)
+    max_pages = 1 if comments_count == 0 else comments_count
+    for comment in comments:
+        CURSOR.execute(f'SELECT username FROM "user" WHERE id={comment[2]}')
+        serialized_list.append(CommentSerializer.auto_fill(comment,CURSOR.fetchone()))
+    
+    return BasePaginateResponse(
+        results=serialized_list,
+        page=page,
+        max_page=max_pages
+    )

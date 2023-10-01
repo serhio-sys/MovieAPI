@@ -1,3 +1,16 @@
+from database.serializers import MovieSerializer
+
+def get_full_movies_info(CURSOR,movies: list | tuple) -> list:
+    serialized_list = []
+    for m in movies:
+        CURSOR.execute(f'''
+        SELECT * FROM "genre_movie" WHERE movie_id = {int(m[0])};
+        ''')
+        genres = CURSOR.fetchall()
+        serialized_list.append(MovieSerializer.auto_fill(movie=m,genres=genres))
+    return serialized_list
+
+
 def generate_command_with_genres_filter(filter_genres:list) -> str:
     command = f'''SELECT * FROM "genre_movie" WHERE '''
     string = "("
@@ -71,7 +84,6 @@ def get_filtered_movie_by_string(cursor,find_string:str,per_page:int,page:int) -
     if find_string != None:
         bonus_string += f'WHERE LOWER(title) LIKE \'%{find_string.lower()}%\' LIMIT {per_page*page} OFFSET {per_page*(page-1)};'
         count = cursor.execute('SELECT COUNT(*) FROM "movie" '+bonus_string)
-        returned_values.append(cursor.fetchall()[0][0])
     else:
         bonus_string += f'LIMIT {per_page*page} OFFSET {per_page*(page-1)};'
     cursor.execute('SELECT COUNT(*) FROM "movie" ')
