@@ -1,0 +1,32 @@
+{% extends '__base__.html' %}
+
+{% block body %}
+<div style="width:100%;height:100vh;display:flex;justify-content:center;align-items:center;flex-direction:column;">
+    <h1>Admin Login Form</h1>
+    <form>
+        <label for="formControlInput" class="form-label mt-2">Password</label>
+        <input type="password" required style="width: 200px;" class="form-control" id="formControlInput" name="password" placeholder="Enter password">
+        <button class="btn btn-dark mt-2">Log In as Admin</button>
+    </form>
+</div>
+<script>
+    document.querySelector('form').addEventListener("submit",create,false)
+
+    async function create(e){
+    e.preventDefault()
+    try{
+      const response = await fetch(window.location.href,{
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({"admin_password": document.getElementsByName("password")[0].value})
+      })
+      window.location.reload()
+    }
+    catch(err){
+      console.log(err)
+    }
+  }
+</script>
+{% endblock body %}

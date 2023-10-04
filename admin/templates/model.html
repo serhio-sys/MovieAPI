@@ -9,13 +9,13 @@
       {% else %}  
         <label for="formControlInput" class="form-label">{{i[0]}}</label>  
         {% if 'int' in i[1]|string %}
-          <input type="number" style="width: 200px;" class="form-control" id="formControlInput" name="{{i[0]}}" placeholder="Enter {{i[0]}}">
+          <input type="number" required style="width: 200px;" class="form-control" id="formControlInput" name="{{i[0]}}" placeholder="Enter {{i[0]}}">
         {% elif i[0] == 'password' %} 
-          <input type="password" style="width: 200px;" class="form-control" id="formControlInput" name="{{i[0]}}" placeholder="Enter {{i[0]}}">
+          <input type="password" required style="width: 200px;" class="form-control" id="formControlInput" name="{{i[0]}}" placeholder="Enter {{i[0]}}">
         {% elif i[0] == 'email' %}
-          <input type="email" style="width: 200px;" class="form-control" id="formControlInput" name="{{i[0]}}" placeholder="Enter {{i[0]}}">
+          <input type="email" required style="width: 200px;" class="form-control" id="formControlInput" name="{{i[0]}}" placeholder="Enter {{i[0]}}">
         {% else %}
-          <input type="text" style="width: 200px;" class="form-control" id="formControlInput" name="{{i[0]}}" placeholder="Enter {{i[0]}}">
+          <input type="text" required style="width: 200px;" class="form-control" id="formControlInput" name="{{i[0]}}" placeholder="Enter {{i[0]}}">
         {% endif %}
       {% endif %}
     {% endfor %}
@@ -43,8 +43,13 @@
                 <th scope="row">{{j[1]}}</th>
               {% endif %}
             {% endfor %}
-            <th><a>Update</a></th>
-            <th><a>Delete</a></th>
+            {% if i.id %}
+              <th><a href="">Update</a></th>
+              <th><a href="{{i.id}}" id="delete">Delete</a></th>
+            {% else %}
+              <th><a href="">Update</a></th>
+              <th><a href="{{i.name}}" id="delete">Delete</a></th>
+            {% endif %}
           </tr>
         {% endfor %}
        
@@ -52,7 +57,9 @@
  </table>  
  <script>
   document.querySelector('form').addEventListener("submit",create,false)
-
+  document.querySelectorAll('#delete').forEach(item => {
+    item.addEventListener("click",delete_btn,false)
+  })
   function getData(){
     var data = {}
     document.querySelectorAll('input').forEach(item => {
@@ -60,6 +67,21 @@
     })
 
     return data
+  }
+
+  async function delete_btn(e){
+    e.preventDefault()
+    const mass = e.target.href.split('/')
+    const prime = mass[mass.length-1]
+    try{
+      const response = await fetch(window.location.href+`${prime}/`,{
+        method:"DELETE",
+      })
+      window.location.reload()
+    }
+    catch(err){
+      console.log(err)
+    }
   }
 
   async function create(e){
