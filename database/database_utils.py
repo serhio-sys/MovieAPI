@@ -17,14 +17,8 @@ def create_connection():
             connection = psycopg2.connect(**DATABASE_CONNECTION_SETTINGS)
             cursor = connection.cursor()
             return connection, cursor
-        except psycopg2.Error as error:
-            if isinstance(error, errors.InFailedSqlTransaction):
-                # Roll back the transaction and retry
-                cursor.connection.rollback()
-                continue
-            else:
-                # Handle other exceptions here if needed
-                raise
+        except psycopg2.errors.InFailedSqlTransaction:
+            cursor.connection.rollback()
 
 
 def get_full_movies_info(cursor, movies: list | tuple) -> list:
@@ -115,7 +109,8 @@ def get_filtered_movie_by_string(cursor, find_string: str, per_page: int, page: 
     returned_values = []
     bonus_string = ''
     if find_string is not None:
-        bonus_string += f'WHERE LOWER(title) LIKE \'%{find_string.lower()}%\' LIMIT {per_page * page} OFFSET {per_page * (page - 1)};'
+        bonus_string += (f'WHERE LOWER(title) LIKE \'%{find_string.lower()}%\' '
+                         f'LIMIT {per_page * page} OFFSET {per_page * (page - 1)};')
         cursor.execute('SELECT COUNT(*) FROM "movie" ' + bonus_string)
     else:
         bonus_string += f'LIMIT {per_page * page} OFFSET {per_page * (page - 1)};'

@@ -16,12 +16,14 @@ admin_router = APIRouter()
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 
-def get_base_context(request: Request) -> dict:
-    return {"request": request, "routes": [route for route in admin_router.routes if list(route.methods)[0] == "GET"]}
+def get_base_context(request: Request, table_name: str = "") -> dict:
+    return {"table_name": table_name, "request": request,
+            "routes": [route for route in admin_router.routes if list(route.methods)[0] == "GET"
+                       and "_table_update" not in route.name]}
 
 
-@admin_router.get("/", name="admin_home")
 @authentication_required()
+@admin_router.get("/", name="admin_home")
 def routes(request: Request):
     context = get_base_context(request=request)
     return templates.TemplateResponse("home.html", context=context)
@@ -34,8 +36,8 @@ def login_admin(request: Request, authenticated=Cookie(default=False)):
     return templates.TemplateResponse("auth.html", {"request": request})
 
 
-@admin_router.get("/logout/", name="admin_logout")
 @authentication_required()
+@admin_router.get("/logout/", name="admin_logout")
 def logout(request: Request):
     response = RedirectResponse(url=request.url_for("admin_login"), status_code=303)
     response.delete_cookie("authenticated")
@@ -70,15 +72,37 @@ class AdminView:
 
         @admin_router.get(f"/{self.table_name}/", name=self.table_name + "_table", response_class=HTMLResponse)
         @authentication_required()
-        def list_route(request: Request, page: int = 1):
+        def list_route(request: Request, **kwargs):
             objects = self.serializer_class.auto_create_list(self.serializer_class,
-                                                             self.admin_query.get_list_of_objects(page))
-            context = get_base_context(request)
+                                                             self.admin_query.get_list_of_objects(kwargs['page']))
+            context = get_base_context(request, self.table_name)
             context.update({
                 "objects": objects,
                 "attrs": [(name, var_type) for name, var_type in zip(self.serializer_class.__annotations__.keys(),
                                                                      self.serializer_class.__annotations__.values())]})
             return templates.TemplateResponse("model.html", context=context)
+
+        @authentication_required()
+        @admin_router.get(path=f"/{self.table_name}/" + "{pk}/",
+                          name=self.table_name + "_table_update",
+                          response_class=HTMLResponse)
+        def route_update(request: Request, pk: int | str = 1):
+            object_ = self.serializer_class.get_object(serializer_class, self.table_name, pk)
+
+            context = get_base_context(request, self.table_name)
+            context.update({
+                "object": object_,
+                "attrs": [(name, var_type) for name, var_type in zip(self.serializer_class.__annotations__.keys(),
+                                                                     self.serializer_class.__annotations__.values())]
+            })
+
+            return templates.TemplateResponse("update.html", context=context)
+
+        @authentication_required()
+        @admin_router.patch(path=f"/{self.table_name}/" + "{pk}/")
+        def route_update(request: Request, serializer: serializer_class, pk: int | str = 1):
+            self.serializer_class.update_model(serializer, self.table_name, pk)
+            return RedirectResponse(url=request.url_for(self.table_name+"_table_update", pk=pk), status_code=303)
 
         @authentication_required()
         @admin_router.post(f"/{self.table_name}/", name=self.table_name + "_table_post")
@@ -88,6 +112,6 @@ class AdminView:
 
         @authentication_required()
         @admin_router.delete(f"/{self.table_name}/" + "{pk}/", name=self.table_name + "_table_delete")
-        def route_delete(pk):
+        def route_delete(pk: int | str):
             self.serializer_class.delete_from_db(pk, self.table_name)
             return ""

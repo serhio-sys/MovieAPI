@@ -1,14 +1,42 @@
+import psycopg2.errors
 from pydantic import BaseModel
 from database.database import CONNECTION, CURSOR, b64crypt_encode
 from typing import Optional
 
-tables = {
-    "movie": "(title,description,reliased,image,raiting)",
-    "genre": "(name)"
-}
-
 
 class BasedSerializer(BaseModel):
+    @staticmethod
+    def get_object(serializer_class, table_name: str, pk: int | str):
+        if hasattr(serializer_class, 'auto_fill'):
+            while True:
+                try:
+                    if table_name == "genre":
+                        CURSOR.execute(f"SELECT * FROM \"{table_name}\" WHERE name = '{pk}';")
+                    else:
+                        CURSOR.execute(f"SELECT * FROM \"{table_name}\" WHERE id = {pk};")
+                    i = CURSOR.fetchone()
+                    return i
+                except psycopg2.errors.InFailedSqlTransaction:
+                    CONNECTION.rollback()
+
+    @staticmethod
+    def update_model(serializer_data, table_name: str, pk: int | str) -> None:
+        command = f'''UPDATE {table_name} SET '''
+        for attr, value in vars(serializer_data).items():
+            if attr == "id":
+                continue
+            try:
+                int(value)
+                command += f"{attr} = {value},"
+            except ValueError:
+                command += f"{attr} = '{value}',"
+        command = command[0:len(command) - 1]
+        if table_name == "genre":
+            command += f" WHERE name = '{pk}';"
+        else:
+            command += f" WHERE id = {pk};"
+        CURSOR.execute(command)
+        CONNECTION.commit()
 
     @staticmethod
     def auto_create_list(serializer_class, objects) -> list:
@@ -93,8 +121,8 @@ class MovieAdminSerializer(BasedSerializer):
         serialized.id = int(movie[0])
         serialized.title = movie[1]
         serialized.description = movie[2]
+        serialized.reliased = int(movie[4])
         serialized.image = movie[3]
-        serialized.relised = int(movie[4])
         serialized.raiting = int(movie[5])
 
         return serialized
@@ -102,8 +130,8 @@ class MovieAdminSerializer(BasedSerializer):
     id: Optional[int] = None
     title: Optional[str] = None
     description: Optional[str] = None
-    relised: Optional[int] = None
     image: Optional[str] = None
+    reliased: Optional[int] = None
     raiting: Optional[int] = None
 
 

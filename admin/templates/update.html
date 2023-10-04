@@ -2,57 +2,47 @@
 
 {% block body %} 
 <div style="display: flex;align-items:center;flex-direction:column;">
-  <h1>Creation Form</h1>
+  <h1>Update Form</h1>
   <form class="form" style="width: 650px;display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:2em;">  
-    {% for i in attrs %}
-      {% if i[0] == 'id' %}
+    {% for i in range(0,attrs|length) %}
+      {% if attrs[i][0] == 'id' %}
       {% else %}  
-        <label class="form-label">{{i[0]}}</label>
-        {% if 'int' in i[1]|string %}
-          <input type="number" required style="width: 200px;" class="form-control" name="{{i[0]}}" placeholder="Enter {{i[0]}}">
-        {% elif i[0] == 'password' %} 
-          <input type="password" required style="width: 200px;" class="form-control" name="{{i[0]}}" placeholder="Enter {{i[0]}}">
-        {% elif i[0] == 'email' %}
-          <input type="email" required style="width: 200px;" class="form-control" name="{{i[0]}}" placeholder="Enter {{i[0]}}">
+        <label class="form-label">{{attrs[i][0]}}</label>
+        {% if 'int' in attrs[i]|string %}
+          <input type="number" required style="width: 200px;" value="{{object[i]}}" class="form-control" name="{{attrs[i][0]}}" placeholder="Enter {{attrs[i][0]}}">
+        {% elif attrs[i][0] == 'password' %}
+          <input type="password" required style="width: 200px;" class="form-control" value="{{object[i]}}" name="{{attrs[i][0]}}" placeholder="Enter {{attrs[i][0]}}">
+        {% elif attrs[i][0] == 'description' %}
+          <textarea required style="width: 200px;" class="form-control" name="{{attrs[i][0]}}" placeholder="Enter {{attrs[i][0]}}">{{object[i]}}</textarea>
+        {% elif attrs[i][0] == 'email' %}
+          <input type="email" required style="width: 200px;" class="form-control" value="{{object[i]}}" name="{{attrs[i][0]}}" placeholder="Enter {{attrs[i][0]}}">
         {% else %}
-          <input type="text" required style="width: 200px;" class="form-control" name="{{i[0]}}" placeholder="Enter {{i[0]}}">
+          <input type="text" required style="width: 200px;" class="form-control" value="{{object[i]}}" name="{{attrs[i][0]}}" placeholder="Enter {{attrs[i][0]}}">
         {% endif %}
       {% endif %}
     {% endfor %}
-    <button class="btn btn-dark" type="submit" style="width: 100px;">Create</button>
+    <button class="btn btn-dark" type="submit" style="width: 100px;">Update</button>
   </form> 
 </div>
-<h1 style="text-align: center;margin-top:1em;" onclick="getData">Table Records</h1>
+<h1 style="text-align: center;margin-top:1em;" onclick="getData"></h1>
 <table class="table table-hover">
     <thead>
        <tr>
         {% for i in attrs %}
             <th scope="col">{{i[0]}}</th>
         {% endfor %}
-        <th scope="col">Actions</th>
-        <th></th>
        </tr>
     </thead>
     <tbody>
-        {% for i in objects %}
           <tr>
-            {% for j in i %}
-              {% if 'https://' in j[1]|string %}
-                <th><img src="{{j[1]}}" width="100%" height="100%"/></th>
+            {% for j in object %}
+              {% if 'https://' in j|string %}
+                <th><img src="{{j}}" width="100%" height="100%"/></th>
               {% else %}
-                <th scope="row">{{j[1]}}</th>
+                <th scope="row">{{j}}</th>
               {% endif %}
             {% endfor %}
-            {% if i.id %}
-              <th><a href="{{url_for(table_name+'_table_update',pk=i.id)}}">Update</a></th>
-              <th><a href="{{url_for(table_name+'_table_delete',pk=i.id)}}" id="delete">Delete</a></th>
-            {% else %}
-              <th><a href="{{url_for(table_name+'_table_update',pk=i.name)}}">Update</a></th>
-              <th><a href="{{url_for(table_name+'_table_delete',pk=i.name)}}" id="delete">Delete</a></th>
-            {% endif %}
           </tr>
-        {% endfor %}
-       
     </tbody>
  </table>  
  <script>
@@ -64,6 +54,9 @@
     var data = {}
     document.querySelectorAll('input').forEach(item => {
       data[item.name] = item.value
+    })
+    document.querySelectorAll('textarea').forEach(item => {
+      data[item.name] = item.innerHTML
     })
 
     return data
@@ -88,7 +81,7 @@
     e.preventDefault()
     try{
       const response = await fetch(window.location.href,{
-        method:"POST",
+        method:"PATCH",
         headers: {
           "Content-Type": "application/json",
           // 'Content-Type': 'application/x-www-form-urlencoded',
